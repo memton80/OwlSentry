@@ -241,7 +241,7 @@ de bureau. Augmentez les intervalles dans la configuration si nécessaire.
 | Aucune alerte SELinux | `auditd` non démarré (`systemctl start auditd`) ou SELinux permissif (`getenforce`). |
 | Alertes en rafale sur `/var/log` | Rotation non standard : ajoutez le chemin à `filesystem.ignore_paths` dans `rules.toml`. |
 | Le démon ne démarre pas après édition de la conf | `owlsentry-daemon --check-config` affiche l'erreur exacte ; `journalctl -u owlsentry-daemon -e`. |
-| Refus SELinux visant `owlsentry_t` | `ausearch -m avc -c owlsentry-daemon -i` ; complétez le module `.te` puis rechargez (`semodule -i`). |
+| Refus SELinux visant `owlsentry_t` (ex. `add_name` sur `daemon.log.*`) | Souvent un étiquetage résiduel d'une installation antérieure au chargement du module. Corrigez : `sudo restorecon -RF /var/log/owlsentry /run/owlsentry /etc/owlsentry /usr/bin/owlsentry-daemon` puis `sudo systemctl restart owlsentry-daemon`. Vérifiez que le module ≥ 1.0.2 est chargé : `semodule -l \| grep owlsentry`. Pour un refus restant : `ausearch -m avc -c owlsentry-daemon -i`, complétez le `.te` et rechargez, ou passez temporairement le domaine en permissif le temps du diagnostic : `sudo semanage permissive -a owlsentry_t` (retour : `-d`). |
 | Blocage firewalld inopérant | `firewalld` arrêté, ou `network.firewalld_block = false` (défaut). Vérifiez `firewall-cmd --list-rich-rules`. |
 | Notifications absentes | Pas de session D-Bus (SSH) ou case « Notifications » décochée dans la GUI. |
 
