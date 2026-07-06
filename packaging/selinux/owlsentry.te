@@ -1,13 +1,16 @@
-policy_module(owlsentry, 1.0.1)
+policy_module(owlsentry, 1.0.2)
 
 ########################################
 #
 # Politique SELinux du démon OwlSentry.
 #
-# Objectif : confiner le démon dans son propre domaine (owlsentry_t) avec le
-# strict nécessaire : lecture du journal d'audit, lecture de /proc et des
-# fichiers de configuration surveillés, écriture dans ses journaux et son
-# socket, dialogue D-Bus avec firewalld.
+# Le démon est un IDS hôte : il doit pouvoir parcourir et poser des watches
+# inotify sur l'ensemble de l'arborescence surveillée (types SELinux très
+# variés sous /etc, /var/log, /tmp…), lire l'état de tous les processus dans
+# /proc (y compris environ, soumis au contrôle « ptrace » en lecture), créer
+# ses journaux datés et son socket. Les règles ci-dessous couvrent cela tout
+# en restant en lecture seule sur le système : aucune écriture n'est permise
+# hors /var/log/owlsentry et /run/owlsentry.
 #
 # Compilation : voir install.sh (make -f /usr/share/selinux/devel/Makefile),
 # paquet requis : selinux-policy-devel.
@@ -20,9 +23,6 @@ policy_module(owlsentry, 1.0.1)
 
 require {
     type auditd_log_t;
-    type etc_t;
-    type var_log_t;
-    type tmp_t;
     class file { read open getattr };
     class dir { read open search getattr watch };
 }
@@ -47,15 +47,24 @@ type owlsentry_etc_t;
 files_config_file(owlsentry_etc_t)
 
 ########################################
+# Capacités propres : chown/fowner pour le socket (root:owlsentry, 0660),
+# dac_* pour parcourir des répertoires restreints, sys_ptrace pour lire
+# /proc/<pid>/environ (détection LD_PRELOAD).
+allow owlsentry_t self:capability { chown fowner dac_override dac_read_search sys_ptrace };
+allow owlsentry_t self:unix_stream_socket create_stream_socket_perms;
+allow owlsentry_t self:fifo_file rw_fifo_file_perms;
+
+########################################
 # Journal d'audit (AVC SELinux)
 allow owlsentry_t auditd_log_t:dir { read open search getattr };
 allow owlsentry_t auditd_log_t:file { read open getattr };
 
 ########################################
-# Journaux propres au démon
+# Journaux propres au démon (fichiers datés daemon.log.*, alerts.jsonl.*)
 manage_dirs_pattern(owlsentry_t, owlsentry_log_t, owlsentry_log_t)
 manage_files_pattern(owlsentry_t, owlsentry_log_t, owlsentry_log_t)
 logging_log_filetrans(owlsentry_t, owlsentry_log_t, { dir file })
+logging_search_logs(owlsentry_t)
 
 ########################################
 # Socket runtime (/run/owlsentry)
@@ -72,19 +81,47 @@ ifdef(`files_runtime_filetrans', `
 # Configuration
 allow owlsentry_t owlsentry_etc_t:dir { read open search getattr };
 allow owlsentry_t owlsentry_etc_t:file { read open getattr };
-
-########################################
-# Surveillance inotify des répertoires système (lecture seule + watch)
 files_read_etc_files(owlsentry_t)
-allow owlsentry_t etc_t:dir watch;
-allow owlsentry_t var_log_t:dir { read open search getattr watch };
-allow owlsentry_t tmp_t:dir { read open search getattr watch };
 
 ########################################
-# /proc (processus, réseau)
+# Surveillance inotify : parcours et watch de toute l'arborescence
+# (lecture des répertoires et des métadonnées uniquement — pas du contenu
+# des fichiers, qui n'est pas nécessaire au moniteur).
+gen_require(`
+    attribute file_type;
+')
+allow owlsentry_t file_type:dir { getattr open read search watch };
+allow owlsentry_t file_type:file getattr;
+allow owlsentry_t file_type:lnk_file { getattr read };
+allow owlsentry_t file_type:sock_file getattr;
+allow owlsentry_t file_type:fifo_file getattr;
+
+########################################
+# /proc : processus (comm, status, exe, environ) et réseau (/proc/net)
 kernel_read_system_state(owlsentry_t)
 kernel_read_network_state(owlsentry_t)
 domain_read_all_domains_state(owlsentry_t)
+# Lire /proc/<pid>/environ exige la permission « ptrace » en lecture.
+# Note : le booléen deny_ptrace peut bloquer ceci ; le démon tolère l'échec
+# (la détection LD_PRELOAD est alors limitée à ses propres processus).
+gen_require(`
+    attribute domain;
+')
+allow owlsentry_t domain:process ptrace;
+
+########################################
+# journald : stderr hérité de systemd (Restart/journal) + syslog
+gen_require(`
+    type init_t;
+')
+allow owlsentry_t init_t:fd use;
+allow owlsentry_t init_t:unix_stream_socket { read write getattr };
+init_use_fds(owlsentry_t)
+logging_send_syslog_msg(owlsentry_t)
+
+########################################
+# Résolution du groupe « owlsentry » (nsswitch : files/sssd)
+auth_use_nsswitch(owlsentry_t)
 
 ########################################
 # Blocage firewalld : exécution de firewall-cmd (D-Bus vers firewalld).
@@ -101,5 +138,4 @@ optional_policy(`
 
 ########################################
 # Divers
-logging_send_syslog_msg(owlsentry_t)
 miscfiles_read_localization(owlsentry_t)

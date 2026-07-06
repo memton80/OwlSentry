@@ -88,8 +88,13 @@ if [[ $NO_SELINUX -eq 0 ]] && command -v checkmodule >/dev/null 2>&1; then
     if [[ -f /usr/share/selinux/devel/Makefile ]]; then
         make -f /usr/share/selinux/devel/Makefile -C packaging/selinux owlsentry.pp
         semodule -i packaging/selinux/owlsentry.pp
-        restorecon -R /usr/bin/owlsentry-daemon /etc/owlsentry /var/log/owlsentry || true
-        echo "    module SELinux 'owlsentry' chargé"
+        # -F : force le ré-étiquetage même si seul l'utilisateur SELinux
+        # diffère (rattrape les répertoires créés avant le chargement du
+        # module, qui portaient var_log_t / var_run_t).
+        restorecon -RF /usr/bin/owlsentry-daemon /usr/bin/owlsentry-gui \
+            /etc/owlsentry /var/log/owlsentry 2>/dev/null || true
+        [[ -d /run/owlsentry ]] && restorecon -RF /run/owlsentry || true
+        echo "    module SELinux 'owlsentry' chargé et contextes restaurés"
     else
         echo "    selinux-policy-devel absent : module SELinux non compilé" >&2
     fi
