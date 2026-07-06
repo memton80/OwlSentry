@@ -1,1 +1,8 @@
-## <summary></summary>
+## <summary>OwlSentry intrusion detection daemon.</summary>
+## <desc>
+##   <p>
+##     Aucune interface publique pour l'instant : aucun autre domaine n'a
+##     besoin d'interagir avec owlsentry_t. Le fichier est requis par la
+##     chaîne de compilation des modules SELinux.
+##   </p>
+## </desc>
