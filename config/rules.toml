@@ -1,0 +1,57 @@
+# /etc/owlsentry/rules.toml — règles de détection personnalisables.
+# Chaque section absente reprend ses valeurs par défaut (voir README).
+
+[filesystem]
+# Fichiers/répertoires critiques : modification => alerte élevée,
+# suppression => critique. Les préfixes couvrent leurs enfants
+# (/etc/sudoers.d couvre /etc/sudoers.d/*).
+sensitive_paths = [
+    "/etc/passwd",
+    "/etc/shadow",
+    "/etc/gshadow",
+    "/etc/group",
+    "/etc/sudoers",
+    "/etc/sudoers.d",
+    "/etc/ssh/sshd_config",
+    "/etc/pam.d",
+    "/etc/crontab",
+    "/etc/cron.d",
+    "/etc/ld.so.preload",
+    "/etc/ld.so.conf",
+    "/etc/selinux/config",
+]
+# Extensions suspectes dans les répertoires temporaires.
+suspicious_extensions = ["sh", "py", "pl", "so", "elf", "bin"]
+suspicious_dirs = ["/tmp", "/var/tmp", "/dev/shm"]
+# Chemins ignorés (le répertoire de logs du démon est toujours ignoré).
+ignore_paths = ["/var/log/owlsentry"]
+
+[network]
+# IP jamais bloquées automatiquement (ajoutez vos passerelles, superviseurs…).
+never_block = ["127.0.0.1", "::1"]
+# Ports distants associés à des outils d'attaque connus.
+suspicious_ports = [1337, 4444, 6667, 9001, 31337]
+# Interpréteurs dont une connexion sortante déclenche une alerte.
+shell_processes = ["bash", "sh", "zsh", "dash", "nc", "ncat", "socat"]
+
+[selinux]
+# Types SELinux cibles dont un refus (AVC) est critique.
+critical_types = [
+    "shadow_t",
+    "passwd_file_t",
+    "sshd_key_t",
+    "security_t",
+    "auditd_log_t",
+    "boot_t",
+    "modules_object_t",
+    "selinux_config_t",
+]
+# Commandes de manipulation SELinux signalées quand auditd les consigne.
+watched_commands = [
+    "chcon",
+    "restorecon",
+    "setenforce",
+    "setsebool",
+    "semodule",
+    "semanage",
+]

@@ -1,0 +1,5 @@
+# Contextes de fichiers OwlSentry
+/usr/bin/owlsentry-daemon        --  gen_context(system_u:object_r:owlsentry_exec_t,s0)
+/etc/owlsentry(/.*)?                 gen_context(system_u:object_r:owlsentry_etc_t,s0)
+/var/log/owlsentry(/.*)?             gen_context(system_u:object_r:owlsentry_log_t,s0)
+/run/owlsentry(/.*)?                 gen_context(system_u:object_r:owlsentry_runtime_t,s0)

@@ -1,0 +1,11 @@
+# Purge/compression des journaux OwlSentry. La rotation quotidienne des
+# fichiers actifs est faite par le démon lui-même (suffixe date) ; logrotate
+# ne fait que compresser et purger les anciens fichiers.
+/var/log/owlsentry/*.log.* /var/log/owlsentry/*.jsonl.* {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    nocreate
+}
