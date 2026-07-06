@@ -1,4 +1,4 @@
-policy_module(owlsentry, 1.0.0)
+policy_module(owlsentry, 1.0.1)
 
 ########################################
 #
@@ -9,20 +9,22 @@ policy_module(owlsentry, 1.0.0)
 # fichiers de configuration surveillés, écriture dans ses journaux et son
 # socket, dialogue D-Bus avec firewalld.
 #
-# Compilation : voir install.sh (checkmodule + semodule_package + semodule),
+# Compilation : voir install.sh (make -f /usr/share/selinux/devel/Makefile),
 # paquet requis : selinux-policy-devel.
+#
+# Portabilité : la politique Fedora utilise files_pid_file()/
+# files_pid_filetrans() pour /run, la refpolicy récente les a renommés en
+# files_runtime_file()/files_runtime_filetrans(). Les ifdef m4 ci-dessous
+# choisissent l'interface disponible.
 #
 
 require {
     type auditd_log_t;
-    type firewalld_t;
-    type var_log_t;
-    type var_run_t;
     type etc_t;
+    type var_log_t;
     type tmp_t;
     class file { read open getattr };
     class dir { read open search getattr watch };
-    class unix_stream_socket { connectto };
 }
 
 ########################################
@@ -35,7 +37,11 @@ type owlsentry_log_t;
 logging_log_file(owlsentry_log_t)
 
 type owlsentry_runtime_t;
-files_runtime_file(owlsentry_runtime_t)
+ifdef(`files_runtime_file', `
+    files_runtime_file(owlsentry_runtime_t)
+', `
+    files_pid_file(owlsentry_runtime_t)
+')
 
 type owlsentry_etc_t;
 files_config_file(owlsentry_etc_t)
@@ -56,7 +62,11 @@ logging_log_filetrans(owlsentry_t, owlsentry_log_t, { dir file })
 manage_dirs_pattern(owlsentry_t, owlsentry_runtime_t, owlsentry_runtime_t)
 manage_files_pattern(owlsentry_t, owlsentry_runtime_t, owlsentry_runtime_t)
 manage_sock_files_pattern(owlsentry_t, owlsentry_runtime_t, owlsentry_runtime_t)
-files_runtime_filetrans(owlsentry_t, owlsentry_runtime_t, { dir file sock_file })
+ifdef(`files_runtime_filetrans', `
+    files_runtime_filetrans(owlsentry_t, owlsentry_runtime_t, { dir file sock_file })
+', `
+    files_pid_filetrans(owlsentry_t, owlsentry_runtime_t, { dir file sock_file })
+')
 
 ########################################
 # Configuration
@@ -77,9 +87,14 @@ kernel_read_network_state(owlsentry_t)
 domain_read_all_domains_state(owlsentry_t)
 
 ########################################
-# Blocage firewalld : exécution de firewall-cmd (D-Bus vers firewalld)
-allow owlsentry_t firewalld_t:unix_stream_socket connectto;
+# Blocage firewalld : exécution de firewall-cmd (D-Bus vers firewalld).
+# Optionnel : ne bloque pas le chargement si le module firewalld est absent.
 optional_policy(`
+    gen_require(`
+        type firewalld_t;
+        class unix_stream_socket connectto;
+    ')
+    allow owlsentry_t firewalld_t:unix_stream_socket connectto;
     dbus_system_bus_client(owlsentry_t)
     dbus_connect_system_bus(owlsentry_t)
 ')
