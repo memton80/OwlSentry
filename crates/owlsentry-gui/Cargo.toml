@@ -1,0 +1,22 @@
+[package]
+name = "owlsentry-gui"
+description = "OwlSentry GUI: real-time alert viewer and dashboard (egui)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "owlsentry-gui"
+path = "src/main.rs"
+
+[dependencies]
+owlsentry-common.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+eframe = "0.32"
+notify-rust = "4"
+clap = { version = "4", features = ["derive"] }

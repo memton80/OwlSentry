@@ -1,0 +1,90 @@
+policy_module(owlsentry, 1.0.0)
+
+########################################
+#
+# Politique SELinux du démon OwlSentry.
+#
+# Objectif : confiner le démon dans son propre domaine (owlsentry_t) avec le
+# strict nécessaire : lecture du journal d'audit, lecture de /proc et des
+# fichiers de configuration surveillés, écriture dans ses journaux et son
+# socket, dialogue D-Bus avec firewalld.
+#
+# Compilation : voir install.sh (checkmodule + semodule_package + semodule),
+# paquet requis : selinux-policy-devel.
+#
+
+require {
+    type auditd_log_t;
+    type firewalld_t;
+    type var_log_t;
+    type var_run_t;
+    type etc_t;
+    type tmp_t;
+    class file { read open getattr };
+    class dir { read open search getattr watch };
+    class unix_stream_socket { connectto };
+}
+
+########################################
+# Déclarations
+type owlsentry_t;
+type owlsentry_exec_t;
+init_daemon_domain(owlsentry_t, owlsentry_exec_t)
+
+type owlsentry_log_t;
+logging_log_file(owlsentry_log_t)
+
+type owlsentry_runtime_t;
+files_runtime_file(owlsentry_runtime_t)
+
+type owlsentry_etc_t;
+files_config_file(owlsentry_etc_t)
+
+########################################
+# Journal d'audit (AVC SELinux)
+allow owlsentry_t auditd_log_t:dir { read open search getattr };
+allow owlsentry_t auditd_log_t:file { read open getattr };
+
+########################################
+# Journaux propres au démon
+manage_dirs_pattern(owlsentry_t, owlsentry_log_t, owlsentry_log_t)
+manage_files_pattern(owlsentry_t, owlsentry_log_t, owlsentry_log_t)
+logging_log_filetrans(owlsentry_t, owlsentry_log_t, { dir file })
+
+########################################
+# Socket runtime (/run/owlsentry)
+manage_dirs_pattern(owlsentry_t, owlsentry_runtime_t, owlsentry_runtime_t)
+manage_files_pattern(owlsentry_t, owlsentry_runtime_t, owlsentry_runtime_t)
+manage_sock_files_pattern(owlsentry_t, owlsentry_runtime_t, owlsentry_runtime_t)
+files_runtime_filetrans(owlsentry_t, owlsentry_runtime_t, { dir file sock_file })
+
+########################################
+# Configuration
+allow owlsentry_t owlsentry_etc_t:dir { read open search getattr };
+allow owlsentry_t owlsentry_etc_t:file { read open getattr };
+
+########################################
+# Surveillance inotify des répertoires système (lecture seule + watch)
+files_read_etc_files(owlsentry_t)
+allow owlsentry_t etc_t:dir watch;
+allow owlsentry_t var_log_t:dir { read open search getattr watch };
+allow owlsentry_t tmp_t:dir { read open search getattr watch };
+
+########################################
+# /proc (processus, réseau)
+kernel_read_system_state(owlsentry_t)
+kernel_read_network_state(owlsentry_t)
+domain_read_all_domains_state(owlsentry_t)
+
+########################################
+# Blocage firewalld : exécution de firewall-cmd (D-Bus vers firewalld)
+allow owlsentry_t firewalld_t:unix_stream_socket connectto;
+optional_policy(`
+    dbus_system_bus_client(owlsentry_t)
+    dbus_connect_system_bus(owlsentry_t)
+')
+
+########################################
+# Divers
+logging_send_syslog_msg(owlsentry_t)
+miscfiles_read_localization(owlsentry_t)

@@ -1,0 +1,53 @@
+[Unit]
+Description=OwlSentry Intrusion Detection System Daemon
+Documentation=https://github.com/memton80/OwlSentry
+After=network.target auditd.service
+Wants=auditd.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/owlsentry-daemon --config /etc/owlsentry/owlsentry.conf
+Restart=on-failure
+RestartSec=5
+
+# --- Réduction de privilèges -------------------------------------------
+# Le démon tourne root (lecture d'audit.log, /proc/*/environ, inotify sur
+# /etc) mais son périmètre est borné par les capabilities et seccomp.
+CapabilityBoundingSet=CAP_AUDIT_READ CAP_NET_ADMIN CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER CAP_SYS_PTRACE
+NoNewPrivileges=true
+
+# Filtre seccomp appliqué par systemd : jeu d'appels système des services
+# standards, sans obsolètes ni reboot/swap.
+SystemCallFilter=@system-service
+SystemCallFilter=~@obsolete @reboot @swap @clock @module @mount
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+# --- Isolation du système de fichiers ----------------------------------
+ProtectSystem=strict
+ReadWritePaths=/var/log/owlsentry
+RuntimeDirectory=owlsentry
+RuntimeDirectoryMode=0750
+LogsDirectory=owlsentry
+LogsDirectoryMode=0750
+PrivateTmp=true
+# read-only : inotify sur /home reste possible si configuré.
+ProtectHome=read-only
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectClock=true
+
+# --- Divers -------------------------------------------------------------
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
